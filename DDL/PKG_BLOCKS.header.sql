@@ -57,12 +57,18 @@ return number;
 --===================================================================
 function f_ins_output_address( 
 				p_transaction_output_ref   number,
+				p_tx_hash   varchar2,
+				p_output_index   number,
 				p_address_index   number,
 				p_public_key varchar2,
 				p_address varchar2,
 				p_address_type varchar2
 )
 return number;
+
+--===================================================================
+procedure sp_post_process_transaction(p_block_transaction_ref number)
+;
 
 END PKG_BLOCKS;
 /

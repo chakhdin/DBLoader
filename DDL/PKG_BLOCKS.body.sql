@@ -97,7 +97,10 @@ function f_ins_transaction_input(
 return number
 is
 l_transaction_input_ref number := s_transaction_inputs.nextval;
+l_amount number;
 begin
+	select max(amount) into l_amount from utxo where tx_hash = p_prev_out_hash and output_index = p_prev_out_index;
+
 	insert into transaction_inputs(
 				TRANSACTION_INPUT_REF,
 				BLOCK_TRANSACTION_REF,
@@ -107,7 +110,8 @@ begin
 				SIG_SCRIPT_SIZE,
 				SIG_SCRIPT,
 				SIG_SCRIPT_ASM,
-				SEQUENCE
+				SEQUENCE,
+				AMOUNT
 		) values (
 				l_transaction_input_ref,
 				p_block_transaction_ref,
@@ -117,8 +121,10 @@ begin
 				p_sig_script_size,
 				p_sig_script,
 				p_sig_script_asm,
-				p_sequence
+				p_sequence,
+				l_amount
 		);
+	update utxo set spent_flag = 'Y' where tx_hash = p_prev_out_hash and output_index = p_prev_out_index;
 	return l_transaction_input_ref;
 end;
 
@@ -159,6 +165,31 @@ begin
 				p_pk_script_asm,
 				p_pk_script_type
 		);
+
+	insert into utxo(
+				UTXO_REF,
+				TRANSACTION_OUTPUT_REF,
+				TX_HASH,
+				OUTPUT_INDEX,
+				AMOUNT,
+				PK_SCRIPT_SIZE,
+				PK_SCRIPT,
+				PK_SCRIPT_ASM,
+				PK_SCRIPT_TYPE,
+				SPENT_FLAG
+		) values (
+				s_utxo.nextval,
+				l_transaction_output_ref,
+				p_tx_hash,
+				p_output_index,
+				p_amount,
+				p_pk_script_size,
+				p_pk_script,
+				p_pk_script_asm,
+				p_pk_script_type,
+				'N'
+		);
+
 	return l_transaction_output_ref;
 	
 end;
@@ -166,6 +197,8 @@ end;
 --===================================================================
 function f_ins_output_address( 
 				p_transaction_output_ref   number,
+				p_tx_hash   varchar2,
+				p_output_index   number,
 				p_address_index   number,
 				p_public_key varchar2,
 				p_address varchar2,
@@ -189,7 +222,38 @@ begin
 				p_public_key,
 				p_address,
 				p_address_type);
+
+	insert into utxo_addresses (
+				TX_HASH,
+				OUTPUT_INDEX,
+				ADDRESS_INDEX,
+				PUBLIC_KEY,
+				ADDRESS,
+				ADDRESS_TYPE
+		) values (
+				p_tx_hash,
+				p_output_index,
+				p_address_index,
+				p_public_key,
+				p_address,
+				p_address_type);
+	
 	return l_output_address_ref;
+end;
+
+--===================================================================
+procedure sp_post_process_transaction(p_block_transaction_ref number)
+is
+begin
+	update block_transactions set fee = (select sum(amount) from transaction_inputs where block_transaction_ref = p_block_transaction_ref) - (select sum(amount) from transaction_outputs where block_transaction_ref = p_block_transaction_ref) where block_transaction_ref = p_block_transaction_ref;
+end;
+
+--===================================================================
+procedure sp_post_process_block(p_block_header_ref number)
+is
+begin
+	null;
+	--update block_transactions set fee = (select sum(amount) from transaction_inputs where block_transaction_ref = p_block_transaction_ref) - (select sum(amount) from transaction_outputs where block_transaction_ref = p_block_transaction_ref) where block_transaction_ref = p_block_transaction_ref;
 end;
 
 END PKG_BLOCKS;
