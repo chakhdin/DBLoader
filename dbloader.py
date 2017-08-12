@@ -28,7 +28,7 @@ class DBLoader(object):
         return cls(hex_)
 
     @classmethod
-    def load(cls):
+    def load(cls, index=None):
         #print(len(rawHex))
 
         block = Block.from_hex(rawHex)
@@ -71,7 +71,8 @@ class DBLoader(object):
                             block.header.nonce, \
                             block.n_transactions, \
                             block.hash, \
-                            block.height))
+                            block.height, \
+                            index))
 
         # function f_ins_BLOCK_TRANSACTION(
         # 				p_block_header_ref   number,
@@ -172,6 +173,8 @@ class DBLoader(object):
             if not tx.is_coinbase():
                 cur.callproc('pkg_blocks.sp_post_process_transaction', [block_transaction_ref])
 
+        cur.callproc('pkg_blocks.sp_post_process_block', [block_header_ref])
+
         con.commit()
         cur.close()
         con.close()
@@ -185,7 +188,7 @@ class DBLoader(object):
         #         print(inp.transaction_index)
 
 
-for jj in range(71037,100000):
+for jj in range(130914, 200000):
     print(jj)
     ok = False
     while not ok:
@@ -206,4 +209,4 @@ for jj in range(71037,100000):
 
     rawHex = a2b_hex(rawText)
     db = DBLoader.from_hex(rawHex)
-    db.load()
+    db.load(jj)
