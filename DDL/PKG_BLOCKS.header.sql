@@ -11,7 +11,8 @@ function f_ins_block_header(
 				p_nonce   number,
 				p_tx_count   number,
 				p_block_hash   varchar2,
-				p_block_height   number
+				p_block_height   number,
+				p_block_index   number
 )
 return number;
 
@@ -68,6 +69,10 @@ return number;
 
 --===================================================================
 procedure sp_post_process_transaction(p_block_transaction_ref number)
+;
+
+--===================================================================
+procedure sp_post_process_block(p_block_header_ref number)
 ;
 
 END PKG_BLOCKS;

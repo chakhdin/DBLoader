@@ -10,7 +10,8 @@ function f_ins_block_header(
 				p_nonce   number,
 				p_tx_count   number,
 				p_block_hash   varchar2,
-				p_block_height   number
+				p_block_height   number,
+				p_block_index   number
 )
 return number
 is
@@ -27,7 +28,8 @@ begin
 				NONCE,
 				TX_COUNT,
 				BLOCK_HASH,
-				BLOCK_HEIGHT
+				BLOCK_HEIGHT,
+				BLOCK_INDEX
 		) values (
 				l_block_header_ref,
 				systimestamp,
@@ -39,7 +41,8 @@ begin
 				p_nonce,
 				p_tx_count,
 				p_block_hash,
-				p_block_height
+				p_block_height,
+				p_block_index
 		);
 	return l_block_header_ref;
 end;
@@ -166,30 +169,35 @@ begin
 				p_pk_script_type
 		);
 
-	insert into utxo(
-				UTXO_REF,
-				TRANSACTION_OUTPUT_REF,
-				TX_HASH,
-				OUTPUT_INDEX,
-				AMOUNT,
-				PK_SCRIPT_SIZE,
-				PK_SCRIPT,
-				PK_SCRIPT_ASM,
-				PK_SCRIPT_TYPE,
-				SPENT_FLAG
-		) values (
-				s_utxo.nextval,
-				l_transaction_output_ref,
-				p_tx_hash,
-				p_output_index,
-				p_amount,
-				p_pk_script_size,
-				p_pk_script,
-				p_pk_script_asm,
-				p_pk_script_type,
-				'N'
-		);
-
+    begin
+        insert into utxo(
+                    UTXO_REF,
+                    TRANSACTION_OUTPUT_REF,
+                    TX_HASH,
+                    OUTPUT_INDEX,
+                    AMOUNT,
+                    PK_SCRIPT_SIZE,
+                    PK_SCRIPT,
+                    PK_SCRIPT_ASM,
+                    PK_SCRIPT_TYPE,
+                    SPENT_FLAG
+            ) values (
+                    s_utxo.nextval,
+                    l_transaction_output_ref,
+                    p_tx_hash,
+                    p_output_index,
+                    p_amount,
+                    p_pk_script_size,
+                    p_pk_script,
+                    p_pk_script_asm,
+                    p_pk_script_type,
+                    'N'
+            );
+    exception
+        when dup_val_on_index then
+            update utxo set transaction_output_ref = l_transaction_output_ref where tx_hash = p_tx_hash and output_index = p_output_index;
+    end;
+	
 	return l_transaction_output_ref;
 	
 end;
@@ -223,21 +231,24 @@ begin
 				p_address,
 				p_address_type);
 
-	insert into utxo_addresses (
-				TX_HASH,
-				OUTPUT_INDEX,
-				ADDRESS_INDEX,
-				PUBLIC_KEY,
-				ADDRESS,
-				ADDRESS_TYPE
-		) values (
-				p_tx_hash,
-				p_output_index,
-				p_address_index,
-				p_public_key,
-				p_address,
-				p_address_type);
-	
+    begin
+        insert into utxo_addresses (
+                    TX_HASH,
+                    OUTPUT_INDEX,
+                    ADDRESS_INDEX,
+                    PUBLIC_KEY,
+                    ADDRESS,
+                    ADDRESS_TYPE
+            ) values (
+                    p_tx_hash,
+                    p_output_index,
+                    p_address_index,
+                    p_public_key,
+                    p_address,
+                    p_address_type);
+    exception when dup_val_on_index then
+		null;
+	end;
 	return l_output_address_ref;
 end;
 
@@ -251,9 +262,16 @@ end;
 --===================================================================
 procedure sp_post_process_block(p_block_header_ref number)
 is
+l_block_height number;
+l_fee number;
+l_reclaimed_fee number;
 begin
 	null;
-	--update block_transactions set fee = (select sum(amount) from transaction_inputs where block_transaction_ref = p_block_transaction_ref) - (select sum(amount) from transaction_outputs where block_transaction_ref = p_block_transaction_ref) where block_transaction_ref = p_block_transaction_ref;
+	
+	select nvl(block_height, block_index) into l_block_height from block_headers where block_header_ref = p_block_header_ref;
+	select sum(fee) into l_fee from block_transactions where block_header_ref = p_block_header_ref;
+	select (sum(amount) - 5000000000/power(2, floor (l_block_height/210000))) into l_reclaimed_fee from transaction_outputs where block_transaction_ref in (select block_transaction_ref from block_transactions where block_header_ref = p_block_header_ref and tx_coinbase_flag = 'Y');
+	update block_headers set fee = l_fee, reclaimed_fee = l_reclaimed_fee where block_header_ref = p_block_header_ref;
 end;
 
 END PKG_BLOCKS;
